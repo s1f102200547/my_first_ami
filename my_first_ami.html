@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AmiVoice 文字起こし</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1a1a24;
+    --border: #2a2a3a;
+    --text: #e8e8f0;
+    --text2: #8888a0;
+    --accent: #4ecdc4;
+    --accent-dim: #2a7a74;
+    --red: #ff6b6b;
+    --red-dim: #7a2a2a;
+    --font: 'Noto Sans JP', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem;
+  }
+
+  h1 {
+    font-size: 1.1rem;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text2);
+    margin-bottom: 2rem;
+  }
+  h1 span { color: var(--accent); font-weight: 700; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 560px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  /* APPKEY input */
+  .key-section { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1.5rem; }
+  .key-section label {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .key-section input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 0.8rem;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .key-section input:focus { border-color: var(--accent); }
+  .key-section input::placeholder { color: var(--text2); }
+  .key-section .key-loaded {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--accent);
+    opacity: 0.7;
+  }
+
+  /* Record button */
+  .rec-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .rec-btn {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 3px solid var(--accent);
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .rec-btn:hover { background: rgba(78, 205, 196, 0.08); }
+  .rec-btn .inner {
+    width: 36px;
+    height: 36px;
+    background: var(--accent);
+    border-radius: 50%;
+    transition: all 0.25s;
+  }
+  .rec-btn.recording { border-color: var(--red); }
+  .rec-btn.recording .inner {
+    background: var(--red);
+    border-radius: 6px;
+    width: 30px;
+    height: 30px;
+  }
+  .rec-btn.recording { animation: pulse-ring 1.5s ease-in-out infinite; }
+
+  @keyframes pulse-ring {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.4); }
+    50% { box-shadow: 0 0 0 16px rgba(255, 107, 107, 0); }
+  }
+
+  .rec-label {
+    font-size: 0.8rem;
+    color: var(--text2);
+    font-weight: 300;
+  }
+  .rec-label.recording { color: var(--red); font-weight: 500; }
+
+  .timer {
+    font-family: var(--mono);
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: var(--text2);
+    margin-top: 0.25rem;
+    letter-spacing: 0.05em;
+  }
+  .timer.recording { color: var(--red); }
+
+  /* Status */
+  .status {
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text2);
+    margin-top: 1rem;
+    min-height: 1.2rem;
+  }
+  .status.error { color: var(--red); }
+  .status.success { color: var(--accent); }
+
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--accent-dim);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    vertical-align: middle;
+    margin-right: 0.4rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Result */
+  .result-card { display: none; }
+  .result-card.show { display: block; }
+  .result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  .result-header h2 {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .confidence {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--text2);
+  }
+  .confidence strong { color: var(--accent); }
+
+  .result-text {
+    font-size: 1.05rem;
+    line-height: 1.9;
+    font-weight: 300;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .copy-btn {
+    margin-top: 1rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* File upload */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 1.5rem 0;
+    color: var(--text2);
+    font-size: 0.75rem;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .file-area {
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    padding: 1.2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .file-area:hover { border-color: var(--accent-dim); background: rgba(78, 205, 196, 0.03); }
+  .file-area input { display: none; }
+  .file-area p { font-size: 0.8rem; color: var(--text2); }
+  .file-area p span { color: var(--accent); }
+
+  .footer {
+    margin-top: 1rem;
+    font-size: 0.65rem;
+    color: var(--text2);
+    text-align: center;
+    opacity: 0.5;
+  }
+</style>
+</head>
+<body>
+
+<h1><span>AmiVoice</span> Transcriber</h1>
+
+<div class="card">
+  <div class="key-section">
+    <label>APPKEY</label>
+    <input type="password" id="appkey" placeholder="マイページから取得したAPPKEYを入力">
+    <span class="key-loaded" id="keyStatus"></span>
+  </div>
+
+  <div class="rec-wrap">
+    <button class="rec-btn" id="recBtn" onclick="toggleRecord()">
+      <div class="inner"></div>
+    </button>
+    <div class="rec-label" id="recLabel">タップして録音開始</div>
+    <div class="timer" id="timer">00:00</div>
+  </div>
+
+  <div class="divider">または</div>
+
+  <div class="file-area" onclick="document.getElementById('fileInput').click()">
+    <input type="file" id="fileInput" accept="audio/*,.wav,.mp3,.ogg,.webm,.m4a" onchange="handleFile(this)">
+    <p>音声ファイルをアップロード<br><span>.wav .mp3 .ogg .webm .m4a</span></p>
+  </div>
+
+  <div class="status" id="status"></div>
+</div>
+
+<div class="card result-card" id="resultCard">
+  <div class="result-header">
+    <h2>認識結果</h2>
+    <div class="confidence" id="confidence"></div>
+  </div>
+  <div class="result-text" id="resultText"></div>
+  <button class="copy-btn" onclick="copyResult()">コピー</button>
+</div>
+
+<div class="footer">AmiVoice API 同期HTTP ・ ログ保存なし ・ 汎用エンジン</div>
+
+<script src="config.js"></script>
+<script>
+// .env から読み込んだ APPKEY を自動設定
+window.addEventListener('DOMContentLoaded', () => {
+  if (typeof APPKEY !== 'undefined' && APPKEY) {
+    document.getElementById('appkey').value = APPKEY;
+    document.getElementById('keyStatus').textContent = '✓ 設定済み';
+  } else {
+    document.getElementById('keyStatus').textContent = 'config.js が未設定';
+  }
+});
+
+let mediaRecorder = null;
+let chunks = [];
+let timerInterval = null;
+let seconds = 0;
+let isRecording = false;
+
+const $ = id => document.getElementById(id);
+
+function setStatus(msg, type = '') {
+  const el = $('status');
+  el.className = 'status' + (type ? ' ' + type : '');
+  el.innerHTML = msg;
+}
+
+function updateTimer() {
+  seconds++;
+  const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+  const s = String(seconds % 60).padStart(2, '0');
+  $('timer').textContent = `${m}:${s}`;
+}
+
+async function toggleRecord() {
+  if (isRecording) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+}
+
+async function startRecording() {
+  const appkey = $('appkey').value.trim();
+  if (!appkey) {
+    setStatus('APPKEYを入力してください', 'error');
+    $('appkey').focus();
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    chunks = [];
+    // Prefer webm (has header, AmiVoice can auto-detect)
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : 'audio/webm';
+    mediaRecorder = new MediaRecorder(stream, { mimeType });
+
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(chunks, { type: mimeType });
+      sendToAmiVoice(blob);
+    };
+
+    mediaRecorder.start();
+    isRecording = true;
+    seconds = 0;
+    $('timer').textContent = '00:00';
+    $('timer').classList.add('recording');
+    $('recBtn').classList.add('recording');
+    $('recLabel').textContent = 'タップして停止';
+    $('recLabel').classList.add('recording');
+    setStatus('');
+    timerInterval = setInterval(updateTimer, 1000);
+  } catch (err) {
+    setStatus('マイクへのアクセスが拒否されました', 'error');
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+  isRecording = false;
+  clearInterval(timerInterval);
+  $('timer').classList.remove('recording');
+  $('recBtn').classList.remove('recording');
+  $('recLabel').textContent = 'タップして録音開始';
+  $('recLabel').classList.remove('recording');
+}
+
+function handleFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const appkey = $('appkey').value.trim();
+  if (!appkey) {
+    setStatus('APPKEYを入力してください', 'error');
+    $('appkey').focus();
+    return;
+  }
+  sendToAmiVoice(file);
+  input.value = '';
+}
+
+async function sendToAmiVoice(audioBlob) {
+  const appkey = $('appkey').value.trim();
+  setStatus('<span class="spinner"></span>音声認識中...', '');
+  $('resultCard').classList.remove('show');
+
+  const form = new FormData();
+  // u, d must come BEFORE a (API requirement: a must be last part)
+  form.append('u', appkey);
+  form.append('d', '-a-general');
+  form.append('a', audioBlob, 'audio.webm');
+
+  try {
+    const res = await fetch('https://acp-api.amivoice.com/v1/nolog/recognize', {
+      method: 'POST',
+      body: form,
+    });
+
+    const data = await res.json();
+
+    if (data.code && data.code !== '' && data.code !== ' ') {
+      setStatus(`エラー: ${data.message || data.code}`, 'error');
+      return;
+    }
+
+    if (!data.text) {
+      setStatus('音声が認識できませんでした（無音または短すぎる可能性）', 'error');
+      return;
+    }
+
+    // Show result
+    $('resultText').textContent = data.text;
+
+    // Confidence
+    if (data.results && data.results.length > 0) {
+      const avgConf = data.results.reduce((sum, r) => sum + (r.confidence || 0), 0) / data.results.length;
+      $('confidence').innerHTML = `信頼度 <strong>${(avgConf * 100).toFixed(1)}%</strong>`;
+    } else {
+      $('confidence').textContent = '';
+    }
+
+    $('resultCard').classList.add('show');
+    setStatus('認識完了', 'success');
+  } catch (err) {
+    setStatus(`通信エラー: ${err.message}`, 'error');
+  }
+}
+
+function copyResult() {
+  const text = $('resultText').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = 'コピーしました';
+    setTimeout(() => { btn.textContent = 'コピー'; }, 1500);
+  });
+}
+</script>
+</body>
+</html>
